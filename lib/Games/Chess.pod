@@ -80,7 +80,7 @@ construction of opening databases.  Not used by C<Games::Chess>.
 
 All the C<Games::Chess::*> packages share a common error-handling
 protocol, depending on the debugging level passed to the
-C<Games::Chess::debug> function.
+C<Games::Chess::debug> function.  (The debugging level is 0 by default.)
 
 At debugging level 0, each function and method returns undefined if it
 is passed invalid arguments or if some other error happens.  A
@@ -138,7 +138,7 @@ Set the debugging level.  See L<ERROR HANDLING>.
 
 Return a description of the most recent error in any of the
 C<Games::Chess::*> packages, or the empty string if no errors have
-occurred.
+occurred.  See L<ERROR HANDLING>.
 
 =item halfmove_valid($halfmove)
 
@@ -289,7 +289,7 @@ and then position[x][y] refers to the square at file x, rank y.
 With no argument, return an object representing a position with all 16
 pieces in their initial positions.
 
-=item Piece-E<gt>new($position)
+=item Position-E<gt>new($position)
 
 With a single argument that is a member of the C<Games::Chess::Position>
 class, return a copy of $position.
@@ -339,6 +339,13 @@ castling availability for the player given by $colour and the side given
 by $piece to the truth value of $can_castle, and return 1.  Return
 undefined otherwise.
 
+=item Position-E<gt>clear($x,$y)
+
+If ($x,$y) is a valid board position, clear the specified square and
+return 1.  Return undefined otherwise.  Equivalent to
+
+   Position->at($x,$y,Piece->new);
+
 =item Position-E<gt>en_passant
 
 Return the en passant target square as the list (FILE,RANK), or
@@ -349,12 +356,12 @@ undefined if there is no en passant target square.
 If ($x,$y) is a valid board position, set the en passant target square
 to ($x,$y) and return 1.  Return undefined otherwise.
 
-=item Position-E<gt>halfmove
+=item Position-E<gt>halfmove_clock
 
 Return the halfmove clock (the number of ply since the last pawn move or
 capture).
 
-=item Position-E<gt>halfmove($halfmove)
+=item Position-E<gt>halfmove_clock($halfmove)
 
 If $halfmove is a valid halfmove clock value, set the halfmove clock to
 $halfmove and return 1.  Return undefined otherwise.
@@ -502,6 +509,10 @@ No representation of chess games and no support for PGN.
 
 =item *
 
+No simple way to clear the en passant target square.
+
+=item *
+
 No way to choose a different font for the chess pieces when creating a
 GIF (if anyone knows an easy way to do this, I'd love to know about it).
 
@@ -524,5 +535,12 @@ L<GD> - a Perl interface to Tom Boutell's C<libgd> graphics library.
 =head1 AUTHOR
 
 Gareth Rees C<E<lt>garethr@cre.canon.co.ukE<gt>>.
+
+=head1 COPYRIGHT
+
+Copyright (c) 1999 Gareth Rees.
+
+This module is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
 
 =cut

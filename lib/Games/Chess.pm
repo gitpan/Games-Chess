@@ -1,9 +1,23 @@
+#------------------------------------------------------------------------------
+# Games::Chess - represent chess pieces, positions, moves and games
+#
+# AUTHOR
+#   Gareth Rees <garethr@cre.canon.co.uk>
+# 
+# COPYRIGHT
+#   Copyright (c) 1999 Gareth Rees.  This module is free software: you 
+#   can distribute and/or modify it under the same terms as Perl itself.
+#
+# $Id: Chess.pm,v 1.5 1999/06/06 18:47:24 gareth Exp $
+#------------------------------------------------------------------------------
+
 package Games::Chess;
 use base 'Exporter';
 use strict;
 use vars qw($RCSID $VERSION $ERRMSG $DEBUG @EXPORT @EXPORT_OK %EXPORT_TAGS);
-$RCSID = q$Id: Chess.pm,v 1.1 1998/11/30 01:00:09 gareth Exp $;
-$VERSION = '0.002';
+
+$RCSID = q$Id: Chess.pm,v 1.5 1999/06/06 18:47:24 gareth Exp $;
+$VERSION = '0.003';
 $ERRMSG = '';
 $DEBUG = 0;
 @EXPORT = ();
@@ -55,7 +69,7 @@ sub errmsg () {
 sub error ( $ ) {
   $ERRMSG = shift;
   if ($DEBUG > 0) {
-    my ($filename,$line) = (caller(1))[1,2];
+    my ($filename,$line) = (caller(2))[1,2];
     my $message = "$ERRMSG at $filename line $line\n";
     $DEBUG >= 2 ? die($message) : warn($message);
   }
@@ -92,19 +106,22 @@ sub xy_valid ($$) {
   return error("($x,$y) off chessboard: not in the range (0,0) to (7,7)");
 }
 
+#------------------------------------------------------------------------------
+# Games::Chess::Piece - representation of a chess piece
+# A piece is represented as a blessed reference to a byte.
+#------------------------------------------------------------------------------
+
 package Games::Chess::Piece;
 use strict;
-use UNIVERSAL 'isa';
-Games::Chess->import('error');
+Games::Chess->import(qw(error piece_valid colour_valid));
 
-# A piece is represented as a blessed reference to a byte.
-
-my @colour_names = qw(empty white black unknown);
-my @piece_names = qw(square pawn knight bishop rook queen king unknown);
+my @COLOUR_NAMES = qw(empty white black unknown);
+my @PIECE_NAMES = qw(square pawn knight bishop rook queen king unknown);
 my $pieces = 'pnbrqk';
-my @code_piece = split //, " $pieces ";
-my %piece_codes;
-@piece_codes{split //, " \U$pieces\E$pieces"} = (0, 9..14, 17..22);
+my @CODE_PIECE = split '', " $pieces ";
+my $PIECE_CODES = " \U$pieces\E$pieces";
+my %PIECE_CODES;
+@PIECE_CODES{split '', $PIECE_CODES} = (0, 9..14, 17..22);
 
 sub new {
   my ($class,$val) = @_;
@@ -114,13 +131,13 @@ sub new {
   } elsif (@_ > 3) {
     return error("Piece->new called with more than 3 arguments");
   } elsif (@_ == 3) {
-    return unless Games::Chess::colour_valid($_[1]);
-    return unless Games::Chess::piece_valid($_[2]);
-    $self = ($_[1] << 3) + $_[2];
-  } elsif (isa($val,'Games::Chess::Piece')) {
+    return unless colour_valid($_[1]);
+    return unless piece_valid($_[2]);
+    $self = chr(($_[1] << 3) + $_[2]);
+  } elsif (UNIVERSAL::isa($val,'Games::Chess::Piece')) {
     $self = $$val;
-  } elsif (exists $piece_codes{$val}) {
-    $self = chr($piece_codes{$val});
+  } elsif (exists $PIECE_CODES{$val}) {
+    $self = chr($PIECE_CODES{$val});
   } elsif ($val !~ /^\d+$/) {
     return error("Piece->new('$val') invalid: '$val' not a chess piece");
   } elsif (0 <= $val and $val < 256 and $val == int $val) {
@@ -134,7 +151,7 @@ sub new {
 sub code ( $ ) {
   my ($self) = @_;
   my $col = (ord($$self) & 24) >> 3;
-  my $code = $code_piece[ord($$self) & 7];
+  my $code = $CODE_PIECE[ord($$self) & 7];
   return $col == 2 ? $code : uc($code);
 }
 
@@ -145,8 +162,8 @@ sub colour ( $ ) {
 
 sub colour_name ( $ ) {
   my ($self) = @_;
-  return $colour_names[$self->colour];
-}  
+  return $COLOUR_NAMES[$self->colour];
+}
 
 sub name ( $ ) {
   my ($self) = @_;
@@ -160,12 +177,16 @@ sub piece ( $ ) {
 
 sub piece_name ( $ ) {
   my ($self) = @_;
-  return $piece_names[$self->piece];
+  return $PIECE_NAMES[$self->piece];
 }
+
+#------------------------------------------------------------------------------
+# Games::Chess::Move - representation of a chess move
+#------------------------------------------------------------------------------
 
 package Games::Chess::Move;
 use strict;
-Games::Chess->import('xy_valid');
+Games::Chess->import(qw(error xy_valid));
 
 sub new {
   my ($class,$xs,$ys,$xd,$yd,@promotion) = @_;
@@ -174,29 +195,47 @@ sub new {
   if (@promotion) {
     my $p = Games::Chess::Piece->new(@promotion);
     return unless $p;
-    $self->{promotion} = $p;
+    $self->{'promotion'} = $p;
   }
   return bless $self, $class;
 }
 
-sub from {
-  my ($self) = @_;
-  return @{$self->{from}};
+sub cmp ( $$ ) {
+  my ($a,$b) = @_;
+  UNIVERSAL::isa($b, 'Games::Chess::Move') 
+    or return error("Argument to 'cmp' must be of class Games::Chess::Move");
+  return ($a->{'from'}[0] <=> $b->{'from'}[0]
+	  or $a->{'from'}[1] <=> $b->{'from'}[1]
+	  or $a->{'to'}[0] <=> $b->{'to'}[0]
+	  or $a->{'to'}[1] <=> $b->{'to'}[1]
+	  or do {
+	    my $ap = $a->{'promotion'}; 
+	    my $bp = $b->{'promotion'}; 
+	    defined $ap ? (defined $bp ? $$ap <=> $$bp : -1) : 1
+	  });
 }
 
-sub to {
+sub from ( $ ) {
   my ($self) = @_;
-  return @{$self->{to}};
+  return @{$self->{'from'}};
 }
 
-sub promotion {
+sub to ( $ ) {
   my ($self) = @_;
-  return @{$self->{promotion}};
+  return @{$self->{'to'}};
 }
+
+sub promotion ( $ ) {
+  my ($self) = @_;
+  return @{$self->{'promotion'}};
+}
+
+#------------------------------------------------------------------------------
+# Games::Chess::Position - representation of a chess position
+#------------------------------------------------------------------------------
 
 package Games::Chess::Position;
 use strict;
-use UNIVERSAL 'isa';
 use vars '%gifs';
 Games::Chess->import(qw(:constants :functions error));
 
@@ -206,7 +245,7 @@ sub new {
   my ($class,$val) = @_;
   
   # Passed another Position object?  Return a copy.
-  if (defined $val and isa($val,'Games::Chess::Position')) {
+  if (defined $val and UNIVERSAL::isa($val,'Games::Chess::Position')) {
     return bless { %$val }, $class;
   }
   
@@ -228,16 +267,16 @@ sub new {
     $rank =~ s/(\d)/' ' x $1/eg;
     length $rank == 8
       or return error("Rank $r '$rank' does not have 8 squares");
-    $ranks[$r] = [ map { $piece_codes{$_} } split //, $rank ];
+    $ranks[$r] = [ map { $PIECE_CODES{$_} } split '', $rank ];
     @{$ranks[$r]} == 8
       or return error("Rank $r '$rank' contains an invalid piece code");
   }
   
   # Transform the 2-d array and assemble into the board.
-  $self->{board} = pack('C64', map { $ranks[7-$_%8][int($_/8)] } 0 .. 63);
+  $self->{'board'} = pack('C64', map { $ranks[7-$_%8][int($_/8)] } 0 .. 63);
   
   # Active color (defaults to white).
-  $fields[1] = 'w' unless defined $fields[1]; 
+  $fields[1] = 'w' unless defined $fields[1];
   if ($fields[1] eq 'w') {
     $self->{'player_to_move'} = &WHITE;
   } elsif ($fields[1] eq 'b') {
@@ -249,9 +288,9 @@ sub new {
   # Castling availability (defaults to none).
   $fields[2] = '-' unless defined $fields[2];
   unless ($fields[2] eq '-') {
-    (join '', sort split //, $fields[2]) eq $fields[2]
+    (join '', sort split '', $fields[2]) eq $fields[2]
       or return error("Castling availability '$fields[2]' not sorted");
-    foreach (split //, $fields[2]) {
+    foreach (split '', $fields[2]) {
       /^[KQkq]$/ or return error("Castling availability '$_' not KQkq");
       $self->{'can_castle'}{$_} = 1;
     }
@@ -260,7 +299,7 @@ sub new {
   # En passant target square (default none).
   $fields[3] = '-' unless defined $fields[3];
   unless ($fields[3] eq '-') {
-    my @square = square($fields[3]);
+    my @square = algebraic_to_xy($fields[3]);
     return unless @square == 2;
     $self->{'en_passant'} = [@square];
   }
@@ -268,12 +307,12 @@ sub new {
   # Half-move clock (default 0).
   $fields[4] = '0' unless defined $fields[4];
   return unless halfmove_count_valid($fields[4]);
-  $self->{halfmove} = $fields[4];
+  $self->{'halfmove'} = $fields[4];
   
   # Fullmove number (default 1).
   $fields[5] = '1' unless defined $fields[5];
   return unless move_number_valid($fields[5]);
-  $self->{move} = $fields[5];
+  $self->{'move'} = $fields[5];
 
   # All done.
   return bless $self, $class;
@@ -282,29 +321,39 @@ sub new {
 sub at {
   my ($self,$x,$y,@piece) = @_;
   return unless xy_valid($x,$y);
-  return Games::Chess::Piece->new(vec($self->{board}, 8 * $x + $y, 8))
+  return Games::Chess::Piece->new(vec($self->{'board'}, 8 * $x + $y, 8))
     unless @piece;
-  my $p = Games::Piece->new(@piece);
+  my $p = Games::Chess::Piece->new(@piece);
   return unless defined $p;
-  vec($self->{board}, 8 * $x + $y, 8) = ord($$p);
+  vec($self->{'board'}, 8 * $x + $y, 8) = ord $$p;
   return 1;
 }
 
 sub board ( $ ) {
   my ($self) = @_;
-  return $self->{board};
+  return $self->{'board'};
 }
 
 sub can_castle {
-  my ($self,$piece,$can_castle) = @_;
-  $piece =~ /^[KQkq]$/ or return
-    error("can_castle($piece) invalid: must be KQkq");
-  return defined $self->{'can_castle'}{$piece} unless defined $can_castle;
+  my ($self,$colour,$piece,$can_castle) = @_;
+  my $p = Games::Chess::Piece->new($colour,$piece);
+  return unless defined $p;
+  my $code = $p->code;
+  $code =~ /^[KQkq]$/ or return
+    error("can_castle($colour,$piece) invalid: must be king or queen");
+  return defined $self->{'can_castle'}{$code} unless defined $can_castle;
   if ($can_castle) {
-    $self->{'can_castle'}{$piece} = 1;
+    $self->{'can_castle'}{$code} = 1;
   } else {
-    delete $self->{'can_castle'}{$piece};
+    delete $self->{'can_castle'}{$code};
   }
+  return 1;
+}
+
+sub clear ( $$$ ) {
+  my ($self,$x,$y) = @_;
+  return unless xy_valid($x,$y);
+  vec($self->{'board'}, 8 * $x + $y, 8) = 0;
   return 1;
 }
 
@@ -319,17 +368,17 @@ sub en_passant {
 
 sub halfmove_clock {
   my ($self,$halfmove) = @_;
-  return $self->{halfmove} unless defined $halfmove;
+  return $self->{'halfmove'} unless defined $halfmove;
   return unless halfmove_count_valid($halfmove);
-  $self->{halfmove} = $halfmove;
+  $self->{'halfmove'} = $halfmove;
   return 1;
 }
 
 sub move_number {
   my ($self,$move) = @_;
-  return $self->{move} unless defined $move;
+  return $self->{'move'} unless defined $move;
   return unless move_number_valid($move);
-  $self->{move} = $move;
+  $self->{'move'} = $move;
   return 1;
 }
 
@@ -341,11 +390,19 @@ sub player_to_move {
   return 1;
 }
 
+my @CASTLE_TESTS = 
+  (
+   [ &WHITE, &KING,  { 'e1' => 'K', 'h1' => 'R' } ],
+   [ &WHITE, &QUEEN, { 'e1' => 'K', 'a1' => 'R' } ],
+   [ &BLACK, &KING,  { 'e8' => 'k', 'h8' => 'r' } ],
+   [ &BLACK, &QUEEN, { 'e8' => 'k', 'a8' => 'r' } ],
+  );
+
 sub validate ( $ ) {
   my ($self) = @_;
   my (%n,%m);
-  @n{split //, ' PNBRQKpnbrqk'} = (0) x 13;
-  @m{split //, ' PNBRQKpnbrqk'} = (0) x 13;
+  @n{split '', $PIECE_CODES} = (0) x 13;
+  @m{split '', $PIECE_CODES} = (0) x 13;
   
   # Count the number of each type of piece.
   foreach my $x (0 .. 7) {
@@ -401,36 +458,36 @@ sub validate ( $ ) {
   }
    
   # Castling availability inconsistent with position?
-  my %tests = ( 'K' => { 'e1' => 'K', 'h1' => 'R' },
-		'Q' => { 'e1' => 'K', 'a1' => 'R' },
-		'k' => { 'e8' => 'k', 'h8' => 'r' },
-		'q' => { 'e8' => 'k', 'a8' => 'r' } );
-  foreach my $castle (keys %tests) {
-    my $p = Games::Chess::Piece->new($castle);
-    if ($self->can_castle($castle)) {
-      foreach my $sq (keys %{$tests{$castle}}) {
+  foreach my $c (@CASTLE_TESTS) {
+    my $p = Games::Chess::Piece->new($c->[0], $c->[1]);
+    if ($self->can_castle($c->[0], $c->[1])) {
+      foreach my $sq (keys %{$c->[2]}) {
 	my $colour = $p->colour_name;
 	my $side = $p->piece_name;
-	my $required = $tests{$castle}{$sq};
+	my $required = $c->[2]{$sq};
 	my $req_name = Games::Chess::Piece->new($required)->piece_name;
 	$self->at(algebraic_to_xy($sq))->code eq $required or return
 	  error("$colour can castle ${side}side but no $req_name on $sq");
       }
     }
   }
-
+  
   # Check halfmove count and move number.
-  my $h = $self->{halfmove};
+  my $h = $self->{'halfmove'};
   0 <= $h or return error("Negative halfmove count $h");
   $h == int $h or return error("Non-integer halfmove count $h");
   $h <= 50 or return error("Halfmove count $h > 50: game should have drawn");
-  my $m = $self->{move};
+  my $m = $self->{'move'};
   1 <= $m or return error("Move number $m not positive");
   $m == int $m or return error("Non-integer move count $m");
   
   # Everything checks out OK.
   return 1;
 }
+
+#------------------------------------------------------------------------------
+# Output Games::Chess::Position in varying formats.
+#------------------------------------------------------------------------------
 
 sub to_FEN ( $ ) {
   my ($self) = @_;
@@ -446,8 +503,8 @@ sub to_FEN ( $ ) {
     ( join '', sort keys %{$self->{'can_castle'}} or '-' ),
     ( defined $self->{'en_passant'}
       ? xy_to_algebraic(@{$self->{'en_passant'}}) : '-' ),
-    $self->{halfmove},
-    $self->{move} );
+    $self->{'halfmove'},
+    $self->{'move'} );
 }
 
 sub to_text ( $ ) {
@@ -462,8 +519,6 @@ sub to_text ( $ ) {
   } reverse 0 .. 7;
 }
 
-use vars '%gifs';
-
 # Width and height of the GIF images for the pieces.
 my ($width,$height) = (33,33);
 
@@ -471,14 +526,14 @@ sub to_GIF ( $ ) {
   my ($self) = shift;
   require GD;
   my %opts = ( lmargin => 20, bmargin => 20, border => 2,
-	       font => &GD::Font::Giant, letters => 1, @_ );
+	       font => GD::Font->Giant, letters => 1, @_ );
 
   # Check options.
   $opts{lmargin} = $opts{bmargin} = 0 unless $opts{letters};
   foreach (qw(lmargin bmargin border)) {
     0 <= $opts{$_} or return error("Option $_ $opts{$_} must be >= 0.");
   }
-  isa($opts{font}, 'GD::Font')
+  UNIVERSAL::isa($opts{font}, 'GD::Font')
     or return error("$opts{font} does not belong to the GD::Font class.");
 
   # Image parameters:
@@ -540,7 +595,9 @@ sub to_GIF ( $ ) {
   return $img->gif;
 }
 
-my %piece_images = 
+use vars '%gifs';
+
+my %piece_images =
   ( 'p' => '5555555555555555555555555555555555555555ff75555555555555fff7555555555555dfff5555555555555fff7555555555555dfff5555555555555fff755555555555ffffff7555555555fffffff755555555ffffffff75555555fffffffff7555555dfffffffff5555555dffffffff5555555555dfff5555555555555fff7555555555555dfff555555555555dffff555555555555ffff755555555555dffff555555555555ffff755555555555dffff555555555555ffff755555555555dffff555555555555ffff75555555555dffffff555555555ffffffff75555555fffffffff7555555dfffffffff555555dffffffffff555555ffffffffff75555555555555555555555555555555555510',
     'n' => '5555555555555555555555f755555555555557df5555555555555dffff755555555555ffefff7555555555dfffffff555555555fffffaff55555555dfffffaef5555555dffffffaef5555555fffffffaef555555ffffffffaef55555dffffffffaef5555dffaffffffaf75555ffbefffffbaf7555ffffffffffbef555fffffffffffaef55ffffffffffffae75ffffffffffffbaf5dfffbffffffffbe75fbebfffffffffae5dffbf75dffffffaf5ff7f75dffffffbe75ffd75dfffffffaf555555dffffffffe755555fffffffffbf55555ffffffffffe75555dfffffffffbf5555dfffffffffff75555ffffffffffff5555dfffffffffff55555fffffffffff755555dfffffffff55555555555555555510',
     'b' => '55555555555555555555555f55f555555555555ff5ff55555555555df7df755555555555ff5ff55555555555dffff755555555555fffbf75555555555ffffaf7555555555ffffbaf555555555fffffbaf55555555dfffffbe75555555dffffffbe75555555fffffffaf5555555ffffffffa7555555dffffffffe5555555ffffffffb7555555dffffffffe5555555ffffffffb75555555fffffffff5555555dffffffff75555555ffffffff755555555ffaaaef755555555daaffbae555555555dffffff555555555dfffffff555555555ffaaaef755555555daaffbae555555fffeffffffeff755ffffffffffffff75fffffffffffffff7dfffffffffffffff5dfffff755ffffff5555555555555555510',
@@ -558,7 +615,7 @@ my %piece_images =
 sub piece_gifs () {
   unless (%gifs) {
     # Create GIF image files for the 12 pieces.
-    foreach my $code (keys %piece_codes) {
+    foreach my $code (keys %PIECE_CODES) {
       next if $code eq ' ';
       $gifs{$code} = GD::Image->new($width,$height);
       my $white = $gifs{$code}->colorAllocate(255,255,255);
