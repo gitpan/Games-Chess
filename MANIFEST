@@ -1,0 +1,7 @@
+Chess.pm
+Chess.pod
+Chess/PGN.pod
+MANIFEST
+Makefile.PL
+README
+t/chess.t
